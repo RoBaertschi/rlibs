@@ -3,8 +3,10 @@
 #define RDIR_H_
 
 #include <assert.h>
+#include <stddef.h>
 #include <string.h>
 #include <stdbool.h>
+#include <errno.h>
 enum rdir_entrytypes {
     RDIR_ENTRYTYPE_FILE = 0,
     RDIR_ENTRYTYPE_SYMLINK,
@@ -27,6 +29,8 @@ struct rdir_dir *rdir_open_dir(const char* dir);
 struct rdir_entry *rdir_read_dir(struct rdir_dir* dir);
 // Creates a dir, returns false on error.
 bool rdir_mdkir(const char* dir);
+// Returns NULL on error. User must free returned buffer after use.
+char *rdir_getcwd();
 
 void rdir_destroy_dir(struct rdir_dir* dir);
 void rdir_destroy_entry(struct rdir_entry* entry);
@@ -34,17 +38,18 @@ void rdir_destroy_entry(struct rdir_entry* entry);
 // Entry has to be valid. This will be asserted.
 const char* rdir_entrytype_str(enum rdir_entrytypes entry);
 
-#ifdef RDIR_IMPLEMENTATION
+#ifndef RDIR_IMPLEMENTATION
 #include <stdlib.h>
 
 #if defined (__unix__) || defined (__APPLE__) && defined (__MACH__)
 #define RDIR_POSIX
-#define _POSIX_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
+
 #else
 #error "Unsupported operating system"
 #endif
@@ -115,6 +120,29 @@ bool rdir_mdkir(const char* dir) {
     }
 #endif // RDIR_POSIX
     return true;
+}
+
+// Don't forget to free the returned buffer.
+char *rdir_getcwd() {
+#ifdef RDIR_POSIX
+    // Snippet from https://www.gnu.org/software/libc/manual/html_node/Working-Directory.html
+    size_t size = 128;
+
+    while (true) {
+        char *buffer = (char *) malloc(size);
+        if (buffer == NULL) {
+            return NULL;
+        }
+        if (getcwd(buffer, size) == buffer) {
+            return buffer;
+        }
+        free(buffer);
+        if (errno != ERANGE) {
+            return NULL;
+        }
+        size *= 2;
+    }
+#endif // RDIR_POSIX
 }
 
 void rdir_destroy_dir(struct rdir_dir* dir) {
