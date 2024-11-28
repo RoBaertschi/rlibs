@@ -50,6 +50,10 @@ const char* rdir_entrytype_str(enum rdir_entrytypes entry);
 #include <sys/stat.h>
 #include <dirent.h>
 
+#elif defined (_WIN32) || defined (_WIN64)
+#include <windows.h>
+
+#define RDIR_WIN
 #else
 #error "Unsupported operating system"
 #endif
@@ -57,6 +61,8 @@ const char* rdir_entrytype_str(enum rdir_entrytypes entry);
 struct rdir_dir {
 #ifdef RDIR_POSIX
     DIR* posix_dir;
+#elif defined(RDIR_WIN)
+    HANDLE windows_dir;
 #endif // RDIR_POSIX
 };
 
@@ -70,6 +76,20 @@ struct rdir_dir *rdir_open_dir(const char* directory) {
 
 #ifdef RDIR_POSIX
     dir->posix_dir = opendir(directory);
+#elif defined(RDIR_WIN)
+    size_t directory_wchar_len = _mbstowcs_l(NULL, directory, 0, NULL);
+
+    if (directory_wchar_len == -1) {
+        return NULL;
+    }
+
+    wchar_t* buffer = malloc((directory_wchar_len + 1) * sizeof(wchar_t));
+    directory_wchar_len = _mbstowcs_l(buffer, directory, directory_wchar_len + 1, NULL);
+
+    size_t dirname_len = strlen(directory);
+    wchar_t* buffer = malloc(dirname_len);
+
+    dir->windows_dir = CreateFile(mbstowcs);
 #endif // RDIR_POSIX
 
     return dir;
